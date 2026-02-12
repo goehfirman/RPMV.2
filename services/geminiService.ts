@@ -1,5 +1,6 @@
+
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { FormData, GeneratedContent, Subject, ClassLevel, RPMResult } from "../types";
+import { FormData, GeneratedContent, Subject, ClassLevel, RPMResult, SoalConfig } from "../types";
 import { CP_REF } from "../data/cpReference";
 
 // Helper: Get AI Instance dengan Prioritas Logic
@@ -244,7 +245,8 @@ export const generateLKPD = async (data: RPMResult, apiKey: string): Promise<str
   }
 };
 
-export const generateSoal = async (data: RPMResult, apiKey: string): Promise<string> => {
+// Fixed: Updated generateSoal signature to accept SoalConfig
+export const generateSoal = async (data: RPMResult, apiKey: string, config: SoalConfig): Promise<string> => {
   let ai;
   try {
     ai = getAI(apiKey);
@@ -252,6 +254,7 @@ export const generateSoal = async (data: RPMResult, apiKey: string): Promise<str
     return `<div style="padding: 20px; color: red; border: 1px solid red;">API Key tidak ditemukan (Code: MISSING).</div>`;
   }
 
+  // Fixed: Enhanced prompt with configuration parameters
   const prompt = `
     Buatkan instrumen penilaian pengetahuan (Soal Latihan) untuk siswa SD.
     
@@ -260,15 +263,19 @@ export const generateSoal = async (data: RPMResult, apiKey: string): Promise<str
     - Mapel: ${data.subject}
     - Materi: ${data.materi}
     - TP: ${data.tp}
+    - Tipe Soal: ${config.type}
+    - Jumlah: ${config.count} butir
+    - Kesulitan: ${config.difficulty}
+    - Level Kognitif: ${config.cognitive}
 
     Instruksi Output:
-    Kembalikan output sebagai string HTML lengkap.
+    Kembalikan output sebagai string HTML lengkap (div wrapper).
+    Gunakan styling inline CSS sederhana agar terlihat rapi.
     
     Struktur Dokumen:
-    1. Judul: "Latihan Soal - [Nama Materi]"
-    2. Bagian A: 5 Soal Pilihan Ganda (Berikan opsi A, B, C, D).
-    3. Bagian B: 5 Soal Isian Singkat / Uraian (HOTS - Higher Order Thinking Skills).
-    4. Kunci Jawaban (Letakkan di bagian paling bawah, pisahkan dengan garis putus-putus "Gunting di sini").
+    1. Judul: "Latihan Soal - ${data.materi}"
+    2. Butir soal disusun rapi sesuai konfigurasi di atas.
+    3. Kunci Jawaban (Letakkan di bagian paling bawah, pisahkan dengan garis putus-putus "Gunting di sini").
   `;
 
   try {

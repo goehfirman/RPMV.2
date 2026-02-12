@@ -18,7 +18,6 @@ const DatePicker: React.FC<DatePickerProps> = ({ label, value, onChange, require
   const [show, setShow] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   
-  // Inisialisasi tanggal tampilan berdasarkan value atau hari ini
   const initialDate = value ? new Date(value) : new Date();
   const [viewDate, setViewDate] = useState(
     !isNaN(initialDate.getTime()) ? initialDate : new Date()
@@ -34,7 +33,6 @@ const DatePicker: React.FC<DatePickerProps> = ({ label, value, onChange, require
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Update viewDate jika value berubah dari luar (misal reset form)
   useEffect(() => {
     if (value) {
       const date = new Date(value);
@@ -56,14 +54,10 @@ const DatePicker: React.FC<DatePickerProps> = ({ label, value, onChange, require
   };
 
   const handleDateClick = (day: number) => {
-    // Buat tanggal baru dengan zona waktu lokal yang aman
     const selected = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
-    
-    // Format YYYY-MM-DD manual untuk menghindari pergeseran timezone
     const year = selected.getFullYear();
     const month = String(selected.getMonth() + 1).padStart(2, '0');
     const d = String(day).padStart(2, '0');
-    
     onChange(`${year}-${month}-${d}`);
     setShow(false);
   };
@@ -81,12 +75,10 @@ const DatePicker: React.FC<DatePickerProps> = ({ label, value, onChange, require
   const firstDay = getFirstDayOfMonth(currentYear, currentMonth);
   
   const days = [];
-  // Empty slots for previous month
   for (let i = 0; i < firstDay; i++) {
     days.push(<div key={`empty-${i}`} className="h-8"></div>);
   }
   
-  // Days of current month
   for (let i = 1; i <= daysInMonth; i++) {
     const checkDate = new Date(value);
     const isSelected = value && 
@@ -104,12 +96,12 @@ const DatePicker: React.FC<DatePickerProps> = ({ label, value, onChange, require
         key={i}
         type="button"
         onClick={() => handleDateClick(i)}
-        className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium transition-all duration-200
+        className={`h-8 w-8 rounded flex items-center justify-center text-[10px] font-bold transition-all
           ${isSelected 
-            ? 'bg-purple-600 text-white shadow-md shadow-purple-300 transform scale-105' 
+            ? 'bg-[#1e3a8a] text-white' 
             : isToday 
-              ? 'bg-purple-50 text-purple-600 font-bold border border-purple-200'
-              : 'text-slate-700 hover:bg-purple-50 hover:text-purple-600'
+              ? 'bg-slate-100 text-[#1e3a8a] border border-slate-200'
+              : 'text-slate-700 hover:bg-slate-100'
           }`}
       >
         {i}
@@ -119,47 +111,41 @@ const DatePicker: React.FC<DatePickerProps> = ({ label, value, onChange, require
 
   return (
     <div className="relative w-full" ref={containerRef}>
-      <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">
+      <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">
         {label} {required && "*"}
       </label>
       
       <div 
         onClick={() => setShow(!show)}
-        className={`w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-sm font-medium cursor-pointer transition-all shadow-sm flex items-center justify-between group
-          ${show ? 'border-purple-400 ring-4 ring-purple-100' : 'hover:border-purple-300'}
+        className={`w-full px-4 py-2.5 bg-white border border-slate-300 rounded text-sm font-medium cursor-pointer transition-all flex items-center justify-between
+          ${show ? 'border-blue-600 ring-1 ring-blue-600' : 'hover:border-slate-400'}
         `}
       >
         <span className={value ? "text-slate-900" : "text-slate-400"}>
           {value ? formatDateDisplay(value) : "Pilih Tanggal"}
         </span>
-        <Calendar size={18} className={`text-purple-500 transition-colors ${show ? 'text-purple-700' : 'group-hover:text-purple-600'}`} />
+        <Calendar size={16} className="text-[#1e3a8a]" />
       </div>
 
       {show && (
-        <div className="absolute z-[60] mt-2 p-4 bg-white border border-purple-100 rounded-xl shadow-2xl animate-fade-in-up w-[320px] left-0 md:left-auto">
+        <div className="absolute z-[60] mt-2 p-4 bg-white border border-slate-200 rounded shadow-2xl animate-fade-in w-[280px] left-0 md:left-auto">
           <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100">
-            <button type="button" onClick={handlePrevMonth} className="p-1 hover:bg-purple-50 rounded-full text-slate-500 hover:text-purple-600 transition-colors">
-              <ChevronLeft size={20} />
+            <button type="button" onClick={handlePrevMonth} className="p-1 hover:bg-slate-100 rounded text-slate-500 transition-colors">
+              <ChevronLeft size={16} />
             </button>
-            <span className="font-bold text-slate-800 text-sm tracking-wide">
+            <span className="font-bold text-slate-800 text-[10px] uppercase tracking-widest">
               {MONTHS[currentMonth]} {currentYear}
             </span>
-            <button type="button" onClick={handleNextMonth} className="p-1 hover:bg-purple-50 rounded-full text-slate-500 hover:text-purple-600 transition-colors">
-              <ChevronRight size={20} />
+            <button type="button" onClick={handleNextMonth} className="p-1 hover:bg-slate-100 rounded text-slate-500 transition-colors">
+              <ChevronRight size={16} />
             </button>
           </div>
-          
           <div className="grid grid-cols-7 mb-2">
             {DAYS.map(day => (
-              <div key={day} className="text-center text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                {day}
-              </div>
+              <div key={day} className="text-center text-[8px] font-bold text-slate-400 uppercase tracking-widest">{day}</div>
             ))}
           </div>
-          
-          <div className="grid grid-cols-7 gap-1">
-            {days}
-          </div>
+          <div className="grid grid-cols-7 gap-1">{days}</div>
         </div>
       )}
     </div>

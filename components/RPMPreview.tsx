@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
-import { RPMResult } from '../types';
-import { Copy, Download, ArrowLeft, FileText, ClipboardList, X, Loader2 } from 'lucide-react';
+import { RPMResult, QuestionType, DifficultyLevel, CognitiveLevel, SoalConfig } from '../types';
+import { Copy, Download, ArrowLeft, FileText, ClipboardList, X, Loader2, Sparkles, Sliders, Printer } from 'lucide-react';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 import { generateLKPD, generateSoal } from '../services/geminiService';
@@ -15,6 +15,14 @@ const RPMPreview: React.FC<RPMPreviewProps> = ({ data, onReset }) => {
   const [activeModal, setActiveModal] = useState<'none' | 'lkpd' | 'soal'>('none');
   const [modalContent, setModalContent] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isConfiguringSoal, setIsConfiguringSoal] = useState(false);
+
+  const [soalConfig, setSoalConfig] = useState<SoalConfig>({
+    type: QuestionType.PG,
+    count: 5,
+    difficulty: DifficultyLevel.Sedang,
+    cognitive: CognitiveLevel.MOTS
+  });
 
   const formatDate = (dateString: string) => {
     if (!dateString) return "-";
@@ -25,81 +33,73 @@ const RPMPreview: React.FC<RPMPreviewProps> = ({ data, onReset }) => {
   const handleCopyToDocs = async (elementId: string) => {
     const element = document.getElementById(elementId);
     if (!element) return;
-    
     try {
       const blob = new Blob([element.innerHTML], { type: 'text/html' });
       // @ts-ignore
       const clipboardItem = new ClipboardItem({ 'text/html': blob });
       // @ts-ignore
       await navigator.clipboard.write([clipboardItem]);
-      alert("Konten berhasil disalin!");
+      alert("Konten disalin ke papan klip.");
     } catch (err) {
-      console.error(err);
-      alert('Gagal menyalin otomatis. Silakan seleksi manual dan salin.');
+      alert('Gagal menyalin. Silakan gunakan cara manual.');
     }
   };
 
   const handleDownloadPDF = (elementId: string, filename: string) => {
     const element = document.getElementById(elementId);
     if(!element) return;
-
-    // Margin: [Top, Left, Bottom, Right] - Bottom agak besar untuk footer
     const opt = {
-      margin:       [10, 10, 20, 10] as [number, number, number, number], 
-      filename:     filename,
-      image:        { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true }, 
-      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
+      margin: [10, 10, 20, 10], 
+      filename: filename,
+      image: { type: 'jpeg', quality: 1 },
+      html2canvas: { scale: 2, useCORS: true }, 
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
+    html2pdf().from(element).set(opt).toPdf().get('pdf').then((pdf: any) => {
+      const totalPages = pdf.internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        pdf.setPage(i);
+        pdf.setFontSize(8);
+        pdf.setTextColor(150);
+        pdf.text(`Dokumen RPM SDN Pekayon 09 - Hal ${i}/${totalPages}`, 10, pdf.internal.pageSize.getHeight() - 10);
+      }
+      pdf.save(filename);
+    });
+  };
 
-    html2pdf()
-      .from(element)
-      .set(opt)
-      .toPdf()
-      .get('pdf')
-      .then((pdf: any) => {
-        const totalPages = pdf.internal.getNumberOfPages();
-        const pageWidth = pdf.internal.pageSize.getWidth();
-        const pageHeight = pdf.internal.pageSize.getHeight();
-        
-        for (let i = 1; i <= totalPages; i++) {
-          pdf.setPage(i);
-          pdf.setFontSize(8);
-          pdf.setTextColor(100, 100, 100); // Abu-abu
-          
-          // Kiri: RPM <Pelajaran> <Kelas>
-          const leftText = `RPM ${data.subject} Kelas ${data.classLevel}`;
-          pdf.text(leftText, 10, pageHeight - 10); 
-
-          // Kanan: Halaman X dari Y
-          const rightText = `Halaman ${i} dari ${totalPages}`;
-          const textWidth = pdf.getStringUnitWidth(rightText) * pdf.internal.getFontSize() / pdf.internal.scaleFactor;
-          pdf.text(rightText, pageWidth - 10 - textWidth, pageHeight - 10); 
-        }
-        pdf.save(filename);
-      });
+  const startGenerateSoal = async () => {
+    const apiKey = localStorage.getItem('gemini_api_key');
+    if (!apiKey) return alert("API Key tidak ditemukan.");
+    setIsGenerating(true);
+    setIsConfiguringSoal(false);
+    try {
+      const content = await generateSoal(data, apiKey, soalConfig);
+      setModalContent(content);
+    } catch (e) {
+      setModalContent('<p class="text-red-600 font-bold p-10 text-center">Gagal menghasilkan soal. Coba beberapa saat lagi.</p>');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleGenerateExtra = async (type: 'lkpd' | 'soal') => {
     const apiKey = localStorage.getItem('gemini_api_key');
-    if (!apiKey) return alert("API Key tidak ditemukan. Harap login ulang.");
-
+    if (!apiKey) return alert("API Key tidak ditemukan.");
+    if (type === 'soal') {
+      setActiveModal('soal');
+      setIsConfiguringSoal(true);
+      return;
+    }
     setIsGenerating(true);
     setActiveModal(type);
-    setModalContent(''); // Clear previous content
-
+    setModalContent('');
     try {
-        let content = '';
-        if (type === 'lkpd') {
-            content = await generateLKPD(data, apiKey);
-        } else {
-            content = await generateSoal(data, apiKey);
-        }
-        setModalContent(content);
+      const content = await generateLKPD(data, apiKey);
+      setModalContent(content);
     } catch (e) {
-        setModalContent('<p class="text-red-500">Gagal menghasilkan konten. Silakan coba lagi.</p>');
+      setModalContent('<p class="text-red-600 font-bold p-10 text-center">Terjadi kesalahan.</p>');
     } finally {
-        setIsGenerating(false);
+      setIsGenerating(false);
     }
   };
 
@@ -107,216 +107,86 @@ const RPMPreview: React.FC<RPMPreviewProps> = ({ data, onReset }) => {
   const SIGNATURE_URL = "https://i.ibb.co.com/KctJSrRC/ttd-gue.png";
   const shouldShowSignature = data.teacherName.trim() === TARGET_TEACHER;
 
-  // Format Nama File: RPM_Pelajaran_Kelas_Nama guru_tanggal dokumen
-  const downloadFileName = `RPM_${data.subject}_Kelas ${data.classLevel}_${data.teacherName}_${data.documentDate}.pdf`;
-
   return (
-    <div className="max-w-5xl mx-auto pb-20 relative">
-      {/* Action Bar */}
-      <div className="sticky top-4 z-40 flex flex-wrap gap-3 justify-between items-center bg-white/80 backdrop-blur-xl border border-purple-200 p-4 rounded-xl shadow-lg shadow-purple-200/50 mb-8 no-print text-slate-900">
-        <button onClick={onReset} className="flex items-center gap-2 text-slate-500 hover:text-purple-600 font-bold transition uppercase text-xs tracking-wider">
-          <ArrowLeft size={16} /> Ubah Data
+    <div className="max-w-5xl mx-auto pb-20 relative animate-fade-in">
+      {/* Action Bar - Formal Dark Version */}
+      <div className="sticky top-20 z-40 flex flex-wrap gap-3 justify-between items-center bg-[#1e293b] text-white p-3 rounded shadow-xl mb-8 no-print">
+        <button onClick={onReset} className="flex items-center gap-2 hover:bg-slate-700 px-3 py-1.5 rounded transition font-bold uppercase text-[10px] tracking-wider">
+          <ArrowLeft size={14} /> Kembali
         </button>
-        <div className="flex flex-wrap gap-3">
-          <button onClick={() => handleGenerateExtra('lkpd')} className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-wide transition text-indigo-700 shadow-sm">
-             <FileText size={16} /> Buat LKPD
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => handleGenerateExtra('lkpd')} className="bg-blue-600 hover:bg-blue-700 px-4 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
+             <FileText size={14} /> LKPD
           </button>
-          <button onClick={() => handleGenerateExtra('soal')} className="flex items-center gap-2 bg-pink-50 border border-pink-200 hover:bg-pink-100 px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-wide transition text-pink-700 shadow-sm">
-             <ClipboardList size={16} /> Buat Soal
+          <button onClick={() => handleGenerateExtra('soal')} className="bg-slate-600 hover:bg-slate-700 px-4 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
+             <ClipboardList size={14} /> SOAL
           </button>
-          <div className="w-px h-8 bg-slate-300 mx-1 hidden sm:block"></div>
-          <button onClick={() => handleCopyToDocs('rpm-content')} className="flex items-center gap-2 bg-white border border-purple-200 hover:bg-purple-50 px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-wide transition text-purple-700 shadow-sm">
-            <Copy size={16} />
-            <span className="hidden sm:inline">Salin</span>
+          <div className="w-px h-6 bg-slate-600 mx-1"></div>
+          <button onClick={() => handleCopyToDocs('rpm-content')} className="bg-slate-100 text-slate-900 hover:bg-white px-4 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
+            <Copy size={14} /> Salin
           </button>
-          <button onClick={() => handleDownloadPDF('rpm-content', downloadFileName)} className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white border border-purple-600 px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-wide transition shadow-md shadow-purple-500/30">
-            <Download size={16} />
-            <span className="hidden sm:inline">Unduh PDF</span>
+          <button onClick={() => handleDownloadPDF('rpm-content', `RPM_${data.subject}.pdf`)} className="bg-emerald-600 hover:bg-emerald-700 px-4 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
+            <Download size={14} /> PDF
           </button>
         </div>
       </div>
 
-      {/* Document Content */}
-      <div id="rpm-content" ref={contentRef} className="bg-white p-8 md:p-12 shadow-2xl min-h-screen border border-slate-200">
+      <div id="rpm-content" ref={contentRef} className="bg-white p-12 shadow-sm border border-slate-200 min-h-screen text-black">
         <style>
             {`
-              #rpm-content { font-family: 'Inter', sans-serif; font-size: 10pt; line-height: 1.5; color: #000000 !important; }
-              table { width: 100%; border-collapse: collapse; margin-bottom: 25px; border: 2px solid #000000; background-color: #fff; }
-              th { background-color: #000000; color: white; font-weight: 700; text-transform: uppercase; font-size: 9pt; padding: 12px 14px; text-align: left; letter-spacing: 0.5px; }
-              td { padding: 12px 14px; border-bottom: 1px solid #000000; vertical-align: top; font-size: 10pt; color: #000000; }
-              tr:nth-child(even) td { background-color: #f8fafc; }
-              tr:last-child td { border-bottom: none; }
-              .section-header { display: flex; align-items: center; gap: 12px; margin-top: 30px; margin-bottom: 15px; border-bottom: 3px solid #000000; padding-bottom: 8px; }
-              .section-number { background-color: #000000; color: white; font-weight: 800; font-size: 12pt; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 4px; }
-              .section-title-text { font-weight: 800; font-size: 13pt; color: #000000; text-transform: uppercase; letter-spacing: 1px; }
-              .label-cell { font-weight: 700; color: #000000; background-color: #f1f5f9; width: 25%; border-right: 1px solid #000000; }
-              ul, ol { margin: 0; padding-left: 20px; color: #000000; }
-              ul { list-style-type: disc; }
-              ol { list-style-type: decimal; }
-              li { margin-bottom: 4px; padding-left: 4px; color: #000000; }
-              .header-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 35px; padding-bottom: 25px; border-bottom: 5px solid #000000; }
+              #rpm-content { font-family: 'Times New Roman', serif; font-size: 11pt; line-height: 1.4; }
+              table { width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 1.5px solid black; }
+              th { background-color: #f1f5f9; color: black; font-weight: bold; border: 1px solid black; padding: 8px; text-align: left; }
+              td { padding: 8px; border: 1px solid black; vertical-align: top; }
+              .doc-title { text-align: center; font-weight: bold; font-size: 14pt; margin-bottom: 5px; text-transform: uppercase; }
+              .doc-subtitle { text-align: center; font-weight: bold; font-size: 12pt; margin-bottom: 25px; }
+              .sec-title { font-weight: bold; margin: 15px 0 10px 0; border-bottom: 1px solid black; padding-bottom: 2px; }
+              ul, ol { margin: 0; padding-left: 20px; }
             `}
         </style>
-
-        {/* Kop Surat */}
-        <div className="header-container">
-            <div style={{ width: '15%', display: 'flex', justifyContent: 'flex-start' }}>
-                <img src="https://i.ibb.co.com/1fQ81J6v/LOGO-PEKAYON-09.jpg" alt="Logo SDN Pekayon 09" crossOrigin="anonymous" style={{ height: '80px', width: 'auto' }} />
+        
+        <div className="flex items-center justify-between border-b-2 border-black pb-4 mb-6">
+            <img src="https://i.ibb.co.com/1fQ81J6v/LOGO-PEKAYON-09.jpg" alt="Logo" style={{ height: '70px' }} />
+            <div className="text-center flex-1 px-4">
+                <h1 className="doc-title">SDN Pekayon 09 Jakarta Timur</h1>
+                <p className="text-xs">Alamat: Jl. Pendidikan Rt 04 Rw 09 Kel. Pekayon Kec. Pasar Rebo</p>
             </div>
-            <div style={{ width: '70%', textAlign: 'center' }}>
-                <h1 style={{ fontWeight: '900', fontSize: '17pt', marginBottom: '8px', color: '#000000', textTransform: 'uppercase', lineHeight: '1.2', letterSpacing: '1px' }}>
-                  Rencana Pembelajaran Mendalam<br/>(RPM)
-                </h1>
-                <p style={{ fontSize: '9.5pt', color: '#000000', margin: 0, fontWeight: '500' }}>SDN Pekayon 09 Jakarta Timur</p>
-                <p style={{ fontSize: '8.5pt', color: '#000000', margin: '4px 0 0 0' }}>Jl. Pendidikan Rt 04 Rw 09 Kel. Pekayon Kec. Pasar rebo</p>
-            </div>
-            <div style={{ width: '15%', display: 'flex', justifyContent: 'flex-end' }}>
-                <img src="https://i.ibb.co.com/fz9ttjq6/Logo-of-Ministry-of-Education-and-Culture-of-Republic-of-Indonesia-svg.png" alt="Logo Kemendikbud" crossOrigin="anonymous" style={{ height: '80px', width: 'auto' }} />
-            </div>
+            <img src="https://i.ibb.co.com/fz9ttjq6/Logo-of-Ministry-of-Education-and-Culture-of-Republic-of-Indonesia-svg.png" alt="Logo" style={{ height: '70px' }} />
         </div>
 
-        {/* 1. Identitas */}
-        <div className="section-header">
-            <div className="section-number">1</div>
-            <div className="section-title-text">Identitas</div>
-        </div>
+        <h2 className="doc-subtitle">RENCANA PEMBELAJARAN MENDALAM (RPM)</h2>
+
+        <div className="sec-title">I. IDENTITAS MODUL</div>
         <table>
           <tbody>
-            <tr>
-              <td className="label-cell">Satuan Pendidikan</td>
-              <td>SDN Pekayon 09</td>
-              <td className="label-cell">Mata Pelajaran</td>
-              <td>{data.subject}</td>
-            </tr>
-            <tr>
-              <td className="label-cell">Kelas / Semester</td>
-              <td>{data.classLevel} / {data.semester}</td>
-              <td className="label-cell">Alokasi Waktu</td>
-              <td>{data.duration} ({data.meetingCount} Pertemuan)</td>
-            </tr>
+            <tr><td width="25%">Mata Pelajaran</td><td width="30%">{data.subject}</td><td width="20%">Kelas / Semester</td><td width="25%">{data.classLevel} / {data.semester}</td></tr>
+            <tr><td>Materi Pokok</td><td colSpan={3}>{data.materi}</td></tr>
+            <tr><td>Alokasi Waktu</td><td colSpan={3}>{data.duration} ({data.meetingCount} Pertemuan)</td></tr>
           </tbody>
         </table>
 
-        {/* 2. Identifikasi */}
-        <div className="section-header">
-            <div className="section-number">2</div>
-            <div className="section-title-text">Identifikasi</div>
-        </div>
-        <table>
-          <tbody>
-            <tr>
-              <td className="label-cell" style={{ width: '30%' }}>Karakteristik Siswa</td>
-              <td dangerouslySetInnerHTML={{ __html: data.studentCharacteristics }}></td>
-            </tr>
-            <tr>
-              <td className="label-cell">Materi Pelajaran</td>
-              <td style={{ whiteSpace: 'pre-line' }}>{data.materi}</td>
-            </tr>
-            <tr>
-              <td className="label-cell">Profil Lulusan</td>
-              <td>
-                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                    {data.dimensions.map((d, i) => (
-                        <span key={i} style={{ backgroundColor: '#f1f5f9', color: '#000000', padding: '4px 10px', borderRadius: '4px', fontSize: '9pt', border: '1px solid #cbd5e1', fontWeight: '600' }}>
-                            {d}
-                        </span>
-                    ))}
-                  </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div className="sec-title">II. TUJUAN PEMBELAJARAN</div>
+        <div className="border border-black p-4 mb-5" style={{ whiteSpace: 'pre-line' }}>{data.tp}</div>
 
-        {/* 3. Desain Pembelajaran */}
-        <div className="section-header">
-            <div className="section-number">3</div>
-            <div className="section-title-text">Desain Pembelajaran</div>
-        </div>
-        <table>
-          <tbody>
-            <tr>
-              <td className="label-cell" style={{ width: '30%' }}>Capaian Pembelajaran (CP)</td>
-              <td>{data.cp}</td>
-            </tr>
-            <tr>
-              <td className="label-cell">Lintas Disiplin Ilmu</td>
-              <td dangerouslySetInnerHTML={{ __html: data.crossDisciplinary }}></td>
-            </tr>
-            <tr>
-              <td className="label-cell">Tujuan Pembelajaran (TP)</td>
-              <td style={{ whiteSpace: 'pre-line' }}>{data.tp}</td>
-            </tr>
-            <tr>
-              <td className="label-cell">Topik Pembelajaran</td>
-              <td dangerouslySetInnerHTML={{ __html: data.topics }}></td>
-            </tr>
-            <tr>
-              <td className="label-cell">Praktik Pedagogis</td>
-              <td>
-                <ul style={{ paddingLeft: '20px' }}>
-                  {data.meetings.map((m, i) => (
-                    <li key={i}>
-                        <strong>Pertemuan {m.meetingNumber}:</strong> {m.pedagogy}
-                    </li>
-                  ))}
-                </ul>
-              </td>
-            </tr>
-            <tr>
-              <td className="label-cell">Kemitraan Pembelajaran</td>
-              <td dangerouslySetInnerHTML={{ __html: data.partnerships }}></td>
-            </tr>
-            <tr>
-              <td className="label-cell">Lingkungan Pembelajaran</td>
-              <td dangerouslySetInnerHTML={{ __html: data.environment }}></td>
-            </tr>
-            <tr>
-              <td className="label-cell">Pemanfaatan Digital</td>
-              <td dangerouslySetInnerHTML={{ __html: data.digitalTools }}></td>
-            </tr>
-          </tbody>
-        </table>
+        <div className="sec-title">III. PROFIL PELAJAR PANCASILA</div>
+        <div className="mb-5 italic">{data.dimensions.join(", ")}</div>
 
-        {/* 4. Pengalaman Belajar */}
-        <div className="section-header">
-            <div className="section-number">4</div>
-            <div className="section-title-text">Pengalaman Belajar</div>
-        </div>
+        <div className="sec-title">IV. KEGIATAN PEMBELAJARAN</div>
         <table>
           <thead>
-            <tr>
-              <th style={{ width: '25%' }}>Tahapan Pembelajaran</th>
-              <th style={{ width: '75%' }}>Deskripsi Kegiatan</th>
-            </tr>
+            <tr><th width="20%">Tahap</th><th>Deskripsi Kegiatan</th></tr>
           </thead>
           <tbody>
-            <tr>
-              <td className="label-cell">Awal / Pembukaan (Memahami)</td>
-              <td dangerouslySetInnerHTML={{ __html: data.learningExperiences.memahami }}></td>
-            </tr>
-            <tr>
-              <td className="label-cell">Inti (Mengaplikasi)</td>
-              <td dangerouslySetInnerHTML={{ __html: data.learningExperiences.mengaplikasi }}></td>
-            </tr>
-            <tr>
-              <td className="label-cell">Penutup (Refleksi)</td>
-              <td dangerouslySetInnerHTML={{ __html: data.learningExperiences.refleksi }}></td>
-            </tr>
+            <tr><td>Pendahuluan</td><td dangerouslySetInnerHTML={{ __html: data.learningExperiences.memahami }}></td></tr>
+            <tr><td>Inti</td><td dangerouslySetInnerHTML={{ __html: data.learningExperiences.mengaplikasi }}></td></tr>
+            <tr><td>Penutup</td><td dangerouslySetInnerHTML={{ __html: data.learningExperiences.refleksi }}></td></tr>
           </tbody>
         </table>
 
-        {/* 5. Asesmen Pembelajaran */}
-        <div className="section-header">
-            <div className="section-number">5</div>
-            <div className="section-title-text">Asesmen Pembelajaran</div>
-        </div>
+        <div className="sec-title">V. ASESMEN</div>
         <table>
           <thead>
-            <tr>
-              <th style={{ width: '33%' }}>Asesmen Awal</th>
-              <th style={{ width: '33%' }}>Asesmen Proses</th>
-              <th style={{ width: '34%' }}>Asesmen Akhir</th>
-            </tr>
+            <tr><th>Awal (Diagnostik)</th><th>Proses (Formatif)</th><th>Akhir (Sumatif)</th></tr>
           </thead>
           <tbody>
             <tr>
@@ -327,120 +197,96 @@ const RPMPreview: React.FC<RPMPreviewProps> = ({ data, onReset }) => {
           </tbody>
         </table>
 
-        {/* 6. Rubrik Penilaian */}
-        <div className="section-header">
-            <div className="section-number">6</div>
-            <div className="section-title-text">Rubrik Penilaian: {data.rubric.title}</div>
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th style={{width: '20%'}}>Kriteria / Aspek</th>
-              <th style={{width: '20%'}}>Sangat Baik (4)</th>
-              <th style={{width: '20%'}}>Baik (3)</th>
-              <th style={{width: '20%'}}>Cukup (2)</th>
-              <th style={{width: '20%'}}>Perlu Bimbingan (1)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.rubric.rows.map((row, index) => (
-              <tr key={index}>
-                <td style={{fontWeight: 'bold', backgroundColor: '#f8fafc'}}>{row.aspect}</td>
-                <td>{row.score4}</td>
-                <td>{row.score3}</td>
-                <td>{row.score2}</td>
-                <td>{row.score1}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {/* Signatures */}
-        <div className="signature-box" style={{ display: 'flex', justifyContent: 'space-between', marginTop: '60px', pageBreakInside: 'avoid' }}>
-            <div style={{ textAlign: 'center', width: '40%' }}>
-                <p style={{ margin: 0 }}>Mengetahui,</p>
-                <p style={{ margin: 0, fontWeight: 'bold' }}>Kepala SDN Pekayon 09</p>
-                <div style={{ height: '180px' }}></div>
-                <p style={{ fontWeight: 'bold', textDecoration: 'underline', margin: 0 }}>{data.principalName}</p>
-                <p style={{ margin: 0 }}>NIP. {data.principalNIP}</p>
+        <div className="flex justify-between mt-20" style={{ pageBreakInside: 'avoid' }}>
+            <div className="text-center w-52">
+                <p>Mengetahui,</p>
+                <p className="font-bold">Kepala SDN Pekayon 09</p>
+                <div style={{ height: '80px' }}></div>
+                <p className="font-bold underline">{data.principalName}</p>
+                <p className="text-xs">NIP. {data.principalNIP}</p>
             </div>
-            <div style={{ textAlign: 'center', width: '40%' }}>
-                <p style={{ margin: 0 }}>Jakarta, {formatDate(data.documentDate)}</p>
-                <p style={{ margin: 0, fontWeight: 'bold' }}>Guru Kelas / Mata Pelajaran</p>
-                <div style={{ height: '180px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-                   {shouldShowSignature && <img src={SIGNATURE_URL} alt="Tanda Tangan" crossOrigin="anonymous" style={{ height: '125px', width: 'auto', marginBottom: '-10px' }} />}
+            <div className="text-center w-52">
+                <p>Jakarta, {formatDate(data.documentDate)}</p>
+                <p className="font-bold">Guru Kelas</p>
+                <div style={{ height: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                   {shouldShowSignature && <img src={SIGNATURE_URL} alt="TTD" crossOrigin="anonymous" style={{ height: '70px' }} />}
                 </div>
-                <p style={{ fontWeight: 'bold', textDecoration: 'underline', margin: 0 }}>{data.teacherName}</p>
-                <p style={{ margin: 0 }}>NIP. {data.teacherNIP}</p>
+                <p className="font-bold underline">{data.teacherName}</p>
+                <p className="text-xs">NIP. {data.teacherNIP}</p>
             </div>
         </div>
       </div>
 
-      {/* Modal untuk LKPD & Soal */}
+      {/* MODALS - Formal Styled */}
       {activeModal !== 'none' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-2xl w-full max-w-4xl h-[90vh] flex flex-col shadow-2xl border border-purple-100">
-            {/* Modal Header */}
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-2xl">
-              <div>
-                 <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                   {activeModal === 'lkpd' ? <FileText className="text-indigo-600" /> : <ClipboardList className="text-pink-600" />}
-                   {activeModal === 'lkpd' ? 'Lembar Kerja Peserta Didik' : 'Soal Evaluasi & Kunci Jawaban'}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded w-full max-w-4xl h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+              <div className="flex items-center gap-3">
+                 <div className="p-1.5 bg-[#1e3a8a] text-white rounded">
+                    {activeModal === 'lkpd' ? <FileText size={16} /> : <ClipboardList size={16} />}
+                 </div>
+                 <h3 className="text-sm font-bold text-slate-800 uppercase tracking-widest">
+                    {activeModal === 'lkpd' ? 'Lembar Kerja Peserta Didik' : 'Generator Instrumen Penilaian'}
                  </h3>
-                 <p className="text-xs text-slate-500 mt-1">Dibuat otomatis oleh AI berdasarkan RPM aktif</p>
               </div>
-              <button onClick={() => setActiveModal('none')} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
-                <X size={24} className="text-slate-500" />
+              <button onClick={() => { setActiveModal('none'); setModalContent(''); setIsConfiguringSoal(false); }} className="text-slate-400 hover:text-slate-600 transition">
+                <X size={20} />
               </button>
             </div>
 
-            {/* Modal Content */}
-            <div className="flex-1 overflow-y-auto p-8 bg-slate-50 custom-scrollbar">
-               {isGenerating ? (
-                  <div className="h-full flex flex-col items-center justify-center gap-4 text-purple-600">
-                     <Loader2 size={48} className="animate-spin" />
-                     <p className="font-medium animate-pulse">Sedang menyusun materi...</p>
+            <div className="flex-1 overflow-y-auto bg-slate-50 p-6">
+               {activeModal === 'soal' && isConfiguringSoal ? (
+                 <div className="max-w-md mx-auto bg-white p-6 rounded border border-slate-200 shadow-sm animate-fade-in-up">
+                    <div className="flex items-center gap-2 mb-6 pb-2 border-b border-slate-100 text-slate-700">
+                        <Sliders size={18} />
+                        <h4 className="text-xs font-bold uppercase tracking-widest">Konfigurasi Instrumen</h4>
+                    </div>
+                    <div className="space-y-4">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-widest">Tipe Soal</label>
+                          <select value={soalConfig.type} onChange={(e) => setSoalConfig({...soalConfig, type: e.target.value as QuestionType})} className="w-full px-3 py-2 border border-slate-300 rounded text-xs outline-none focus:border-blue-600">{Object.values(QuestionType).map(v => <option key={v} value={v}>{v}</option>)}</select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-widest">Jumlah (Butir)</label>
+                          <input type="number" value={soalConfig.count} onChange={(e) => setSoalConfig({...soalConfig, count: parseInt(e.target.value)})} className="w-full px-3 py-2 border border-slate-300 rounded text-xs outline-none focus:border-blue-600" min="1" max="50" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-widest">Kesulitan</label>
+                            <select value={soalConfig.difficulty} onChange={(e) => setSoalConfig({...soalConfig, difficulty: e.target.value as DifficultyLevel})} className="w-full px-3 py-2 border border-slate-300 rounded text-xs outline-none focus:border-blue-600">{Object.values(DifficultyLevel).map(v => <option key={v} value={v}>{v}</option>)}</select>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-widest">Level Kognitif</label>
+                            <select value={soalConfig.cognitive} onChange={(e) => setSoalConfig({...soalConfig, cognitive: e.target.value as CognitiveLevel})} className="w-full px-3 py-2 border border-slate-300 rounded text-xs outline-none focus:border-blue-600">{Object.values(CognitiveLevel).map(v => <option key={v} value={v}>{v}</option>)}</select>
+                          </div>
+                        </div>
+                        <button onClick={startGenerateSoal} className="w-full mt-4 bg-[#1e3a8a] hover:bg-blue-900 text-white font-bold py-3 rounded text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-2 transition"><Sparkles size={14} /> Proses Dengan AI</button>
+                    </div>
+                 </div>
+               ) : isGenerating ? (
+                  <div className="h-full flex flex-col items-center justify-center gap-4 text-slate-500">
+                     <Loader2 size={40} className="animate-spin text-[#1e3a8a]" />
+                     <p className="text-xs font-bold uppercase tracking-[0.2em]">Memproses Data...</p>
                   </div>
                ) : (
-                  <div id="extra-content" className="bg-white p-8 shadow-lg border border-slate-200 min-h-full">
-                     <style>{`
-                        #extra-content { font-family: 'Inter', sans-serif; color: black; }
-                        #extra-content h1, #extra-content h2, #extra-content h3 { font-weight: bold; margin-bottom: 1rem; }
-                        #extra-content p { margin-bottom: 0.5rem; }
-                        #extra-content table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
-                        #extra-content th, #extra-content td { border: 1px solid black; padding: 8px; }
-                        #extra-content ul, #extra-content ol { margin-left: 20px; margin-bottom: 1rem; }
-                     `}</style>
-                     <div dangerouslySetInnerHTML={{ __html: modalContent }} />
-                  </div>
+                  <div id="extra-content" className="bg-white p-10 border border-slate-300 min-h-full mx-auto max-w-4xl text-black" dangerouslySetInnerHTML={{ __html: modalContent }} />
                )}
             </div>
 
-            {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-100 flex justify-end gap-3 bg-white rounded-b-2xl">
-              <button 
-                onClick={() => setActiveModal('none')} 
-                className="px-5 py-2.5 text-slate-600 font-bold text-sm hover:bg-slate-50 rounded-lg transition"
-              >
-                Tutup
-              </button>
-              {!isGenerating && modalContent && (
-                <>
-                  <button 
-                    onClick={() => handleCopyToDocs('extra-content')} 
-                    className="px-5 py-2.5 bg-white border border-purple-200 text-purple-700 font-bold text-sm rounded-lg hover:bg-purple-50 transition shadow-sm flex items-center gap-2"
-                  >
-                    <Copy size={16} /> Salin
+            {!isConfiguringSoal && !isGenerating && modalContent && (
+              <div className="p-4 border-t border-slate-200 flex justify-between items-center bg-white">
+                <button onClick={() => setIsConfiguringSoal(true)} className="text-[10px] font-bold text-[#1e3a8a] hover:underline uppercase tracking-widest">Atur Ulang</button>
+                <div className="flex gap-2">
+                  <button onClick={() => handleCopyToDocs('extra-content')} className="bg-slate-100 border border-slate-200 px-4 py-2 rounded text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
+                    <Copy size={14} /> Salin
                   </button>
-                  <button 
-                    onClick={() => handleDownloadPDF('extra-content', `${activeModal === 'lkpd' ? 'LKPD' : 'SOAL'}_${data.subject}.pdf`)} 
-                    className="px-5 py-2.5 bg-purple-600 text-white font-bold text-sm rounded-lg hover:bg-purple-700 transition shadow-lg flex items-center gap-2"
-                  >
-                    <Download size={16} /> Unduh PDF
+                  <button onClick={() => handleDownloadPDF('extra-content', `OUTPUT_${activeModal.toUpperCase()}.pdf`)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
+                    <Download size={14} /> PDF
                   </button>
-                </>
-              )}
-            </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
