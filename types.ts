@@ -46,32 +46,6 @@ export enum GraduateDimension {
   Komunikasi = "Komunikasi"
 }
 
-export enum QuestionType {
-  PG = "Pilihan Ganda",
-  PGK = "Pilihan Ganda Kompleks (Kategori)",
-  PGM = "Pilihan Ganda Multi Answer",
-  BS = "Benar / Salah"
-}
-
-export enum DifficultyLevel {
-  Mudah = "Mudah",
-  Sedang = "Sedang",
-  Sulit = "Sulit"
-}
-
-export enum CognitiveLevel {
-  LOTS = "LOTS",
-  MOTS = "MOTS",
-  HOTS = "HOTS"
-}
-
-export interface SoalConfig {
-  type: QuestionType;
-  count: number;
-  difficulty: DifficultyLevel;
-  cognitive: CognitiveLevel;
-}
-
 export interface MeetingPlan {
   meetingNumber: number;
   pedagogy: PedagogicalPractice;
