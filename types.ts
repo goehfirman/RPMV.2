@@ -46,6 +46,24 @@ export enum GraduateDimension {
   Komunikasi = "Komunikasi"
 }
 
+export enum QuestionType {
+  PG = "Pilihan Ganda",
+  Isian = "Isian Singkat",
+  Uraian = "Uraian"
+}
+
+export enum DifficultyLevel {
+  Mudah = "Mudah",
+  Sedang = "Sedang",
+  Sukar = "Sukar"
+}
+
+export enum CognitiveLevel {
+  LOTS = "LOTS (C1-C2)",
+  MOTS = "MOTS (C3)",
+  HOTS = "HOTS (C4-C6)"
+}
+
 export interface MeetingPlan {
   meetingNumber: number;
   pedagogy: PedagogicalPractice;
@@ -103,3 +121,10 @@ export interface GeneratedContent {
 }
 
 export interface RPMResult extends FormData, GeneratedContent {}
+
+export interface SoalConfig {
+  type: QuestionType;
+  count: number;
+  difficulty: DifficultyLevel;
+  cognitive: CognitiveLevel;
+}

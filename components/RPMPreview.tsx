@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
-import { RPMResult } from '../types';
-import { Copy, Download, ArrowLeft, FileText, ClipboardList, X, Loader2 } from 'lucide-react';
+import { RPMResult, QuestionType, DifficultyLevel, CognitiveLevel, SoalConfig } from '../types';
+import { Copy, Download, ArrowLeft, FileText, ClipboardList, X, Loader2, Sparkles, Sliders, Image as ImageIcon } from 'lucide-react';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 import { generateLKPD, generateSoal } from '../services/geminiService';
@@ -15,6 +15,14 @@ const RPMPreview: React.FC<RPMPreviewProps> = ({ data, onReset }) => {
   const [activeModal, setActiveModal] = useState<'none' | 'lkpd' | 'soal'>('none');
   const [modalContent, setModalContent] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isConfiguringSoal, setIsConfiguringSoal] = useState(false);
+
+  const [soalConfig, setSoalConfig] = useState<SoalConfig>({
+    type: QuestionType.PG,
+    count: 5,
+    difficulty: DifficultyLevel.Sedang,
+    cognitive: CognitiveLevel.MOTS
+  });
 
   const formatDate = (dateString: string) => {
     if (!dateString) return "-";
@@ -76,6 +84,12 @@ const RPMPreview: React.FC<RPMPreviewProps> = ({ data, onReset }) => {
     const apiKey = localStorage.getItem('gemini_api_key');
     if (!apiKey) return alert("API Key tidak ditemukan.");
 
+    if (type === 'soal') {
+      setActiveModal('soal');
+      setIsConfiguringSoal(true);
+      return;
+    }
+
     setIsGenerating(true);
     setActiveModal(type);
     setModalContent('');
@@ -83,12 +97,29 @@ const RPMPreview: React.FC<RPMPreviewProps> = ({ data, onReset }) => {
     try {
         let content = '';
         if (type === 'lkpd') content = await generateLKPD(data, apiKey);
-        else content = await generateSoal(data, apiKey);
         setModalContent(content);
     } catch (e) {
-        setModalContent('<p class="text-red-500 text-center font-bold">Gagal menghasilkan konten.</p>');
+        setModalContent('<p class="text-red-500 text-center font-bold">Gagal menghasilkan konten. Pastikan kuota API mencukupi.</p>');
     } finally {
         setIsGenerating(false);
+    }
+  };
+
+  const startGenerateSoal = async () => {
+    const apiKey = localStorage.getItem('gemini_api_key');
+    if (!apiKey) return alert("API Key tidak ditemukan.");
+
+    setIsGenerating(true);
+    setIsConfiguringSoal(false);
+    setModalContent('');
+
+    try {
+      const content = await generateSoal(data, apiKey, soalConfig);
+      setModalContent(content);
+    } catch (e) {
+      setModalContent('<p class="text-red-500 text-center font-bold">Gagal menghasilkan soal. Pastikan kuota API mencukupi.</p>');
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -132,6 +163,7 @@ const RPMPreview: React.FC<RPMPreviewProps> = ({ data, onReset }) => {
               .header-container { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px double black; padding-bottom: 10px; margin-bottom: 20px; }
               .section-title { font-weight: bold; text-transform: uppercase; margin-top: 20px; margin-bottom: 10px; border-bottom: 1px solid black; display: inline-block; padding-bottom: 2px; }
               ul, ol { margin: 0; padding-left: 20px; }
+              img { max-width: 100%; height: auto; display: block; margin: 10px auto; }
             `}
         </style>
 
@@ -213,25 +245,72 @@ const RPMPreview: React.FC<RPMPreviewProps> = ({ data, onReset }) => {
             <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
               <h3 className="text-sm font-bold text-slate-800 uppercase tracking-widest flex items-center gap-2">
                  {activeModal === 'lkpd' ? <FileText size={18} /> : <ClipboardList size={18} />}
-                 {activeModal === 'lkpd' ? 'Lembar Kerja Peserta Didik' : 'Instrumen Penilaian'}
+                 {activeModal === 'lkpd' ? 'Generator LKPD (Bergambar)' : 'Generator Instrumen Soal (Bergambar)'}
               </h3>
-              <button onClick={() => setActiveModal('none')} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+              <button onClick={() => { setActiveModal('none'); setModalContent(''); setIsConfiguringSoal(false); }} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
             </div>
-            <div className="flex-1 overflow-y-auto p-8 bg-slate-50 custom-scrollbar">
-               {isGenerating ? (
-                  <div className="h-full flex flex-col items-center justify-center gap-4 text-slate-500">
-                     <Loader2 size={40} className="animate-spin text-[#1e3a8a]" />
-                     <p className="font-bold text-xs uppercase tracking-widest">Memproses Dokumen...</p>
+            <div className="flex-1 overflow-y-auto bg-slate-50 p-6 custom-scrollbar">
+               {activeModal === 'soal' && isConfiguringSoal ? (
+                 <div className="max-w-md mx-auto bg-white p-6 rounded border border-slate-200 shadow-sm animate-fade-in-up">
+                    <div className="flex items-center gap-2 mb-6 pb-2 border-b border-slate-100 text-slate-700">
+                        <Sliders size={18} />
+                        <h4 className="text-xs font-bold uppercase tracking-widest">Konfigurasi Instrumen & Visual</h4>
+                    </div>
+                    <div className="space-y-4">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-widest">Tipe Soal</label>
+                          <select value={soalConfig.type} onChange={(e) => setSoalConfig({...soalConfig, type: e.target.value as QuestionType})} className="w-full px-3 py-2 border border-slate-300 rounded text-xs outline-none focus:border-blue-600">{Object.values(QuestionType).map(v => <option key={v} value={v}>{v}</option>)}</select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-widest">Jumlah (Butir)</label>
+                          <input type="number" value={soalConfig.count} onChange={(e) => setSoalConfig({...soalConfig, count: parseInt(e.target.value)})} className="w-full px-3 py-2 border border-slate-300 rounded text-xs outline-none focus:border-blue-600" min="1" max="50" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-widest">Kesulitan</label>
+                            <select value={soalConfig.difficulty} onChange={(e) => setSoalConfig({...soalConfig, difficulty: e.target.value as DifficultyLevel})} className="w-full px-3 py-2 border border-slate-300 rounded text-xs outline-none focus:border-blue-600">{Object.values(DifficultyLevel).map(v => <option key={v} value={v}>{v}</option>)}</select>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-widest">Level Kognitif</label>
+                            <select value={soalConfig.cognitive} onChange={(e) => setSoalConfig({...soalConfig, cognitive: e.target.value as CognitiveLevel})} className="w-full px-3 py-2 border border-slate-300 rounded text-xs outline-none focus:border-blue-600">{Object.values(CognitiveLevel).map(v => <option key={v} value={v}>{v}</option>)}</select>
+                          </div>
+                        </div>
+                        <div className="p-3 bg-blue-50 border border-blue-100 rounded text-[10px] text-blue-800 flex items-start gap-2">
+                            <ImageIcon size={14} className="mt-0.5" />
+                            <p>Sistem akan otomatis menghasilkan <strong>gambar ilustrasi (stimulus)</strong> yang relevan untuk soal yang membutuhkan visualisasi.</p>
+                        </div>
+                        <button onClick={startGenerateSoal} className="w-full mt-4 bg-[#1e3a8a] hover:bg-blue-900 text-white font-bold py-3 rounded text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-2 transition"><Sparkles size={14} /> Proses Dengan AI Visual</button>
+                    </div>
+                 </div>
+               ) : isGenerating ? (
+                  <div className="h-full flex flex-col items-center justify-center gap-6 text-slate-500">
+                     <div className="relative">
+                        <Loader2 size={48} className="animate-spin text-[#1e3a8a]" />
+                        <Sparkles size={20} className="absolute -top-2 -right-2 text-yellow-500 animate-pulse" />
+                     </div>
+                     <div className="text-center space-y-2">
+                        <p className="text-sm font-bold uppercase tracking-widest text-slate-800">Sedang Menyusun Konten...</p>
+                        <p className="text-xs text-slate-400">AI sedang membuat teks dan <span className="text-blue-600 font-bold">menghasilkan gambar ilustrasi</span>.</p>
+                        <p className="text-[10px] text-slate-400 italic">(Proses ini mungkin memakan waktu hingga 30 detik)</p>
+                     </div>
                   </div>
                ) : (
-                  <div id="extra-content" className="bg-white p-10 border border-slate-300 min-h-full mx-auto shadow-sm" dangerouslySetInnerHTML={{ __html: modalContent }} />
+                  <div id="extra-content" className="bg-white p-10 border border-slate-300 min-h-full mx-auto max-w-4xl text-black shadow-sm" dangerouslySetInnerHTML={{ __html: modalContent }} />
                )}
             </div>
-            {!isGenerating && modalContent && (
-               <div className="p-3 border-t border-slate-200 flex justify-end gap-2 bg-white">
-                  <button onClick={() => handleCopyToDocs('extra-content')} className="bg-slate-100 border border-slate-200 text-slate-700 px-4 py-2 rounded text-xs font-bold uppercase tracking-widest hover:bg-slate-200">Salin</button>
-                  <button onClick={() => handleDownloadPDF('extra-content', `DOC_${activeModal}.pdf`)} className="bg-[#1e3a8a] text-white px-4 py-2 rounded text-xs font-bold uppercase tracking-widest hover:bg-blue-900">Download PDF</button>
-               </div>
+
+            {!isConfiguringSoal && !isGenerating && modalContent && (
+              <div className="p-4 border-t border-slate-200 flex justify-between items-center bg-white">
+                <button onClick={() => setIsConfiguringSoal(true)} className="text-[10px] font-bold text-[#1e3a8a] hover:underline uppercase tracking-widest">Atur Ulang</button>
+                <div className="flex gap-2">
+                  <button onClick={() => handleCopyToDocs('extra-content')} className="bg-slate-100 border border-slate-200 px-4 py-2 rounded text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
+                    <Copy size={14} /> Salin
+                  </button>
+                  <button onClick={() => handleDownloadPDF('extra-content', `OUTPUT_${activeModal.toUpperCase()}.pdf`)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
+                    <Download size={14} /> PDF
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </div>
