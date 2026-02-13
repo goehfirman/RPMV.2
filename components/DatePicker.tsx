@@ -118,17 +118,17 @@ const DatePicker: React.FC<DatePickerProps> = ({ label, value, onChange, require
       <div 
         onClick={() => setShow(!show)}
         className={`w-full px-4 py-2.5 bg-white border border-slate-300 rounded text-sm font-medium cursor-pointer transition-all flex items-center justify-between
-          ${show ? 'border-blue-600 ring-1 ring-blue-600' : 'hover:border-slate-400'}
+          ${show ? 'border-[#1e3a8a] ring-1 ring-[#1e3a8a]' : 'hover:border-slate-400'}
         `}
       >
         <span className={value ? "text-slate-900" : "text-slate-400"}>
           {value ? formatDateDisplay(value) : "Pilih Tanggal"}
         </span>
-        <Calendar size={16} className="text-[#1e3a8a]" />
+        <Calendar size={16} className={`text-[#1e3a8a] ${show ? 'text-blue-800' : ''}`} />
       </div>
 
       {show && (
-        <div className="absolute z-[60] mt-2 p-4 bg-white border border-slate-200 rounded shadow-2xl animate-fade-in w-[280px] left-0 md:left-auto">
+        <div className="absolute z-[60] mt-2 p-4 bg-white border border-slate-200 rounded shadow-xl animate-fade-in w-[280px] left-0 md:left-auto">
           <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100">
             <button type="button" onClick={handlePrevMonth} className="p-1 hover:bg-slate-100 rounded text-slate-500 transition-colors">
               <ChevronLeft size={16} />

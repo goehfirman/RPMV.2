@@ -1,4 +1,3 @@
-
 export enum ClassLevel {
   Kelas1 = "1",
   Kelas2 = "2",
@@ -45,32 +44,6 @@ export enum GraduateDimension {
   Kemandirian = "Kemandirian",
   Kesehatan = "Kesehatan",
   Komunikasi = "Komunikasi"
-}
-
-// Fixed: Added missing exports for Question and Difficulty levels
-export enum QuestionType {
-  PG = "Pilihan Ganda",
-  Isian = "Isian",
-  Uraian = "Uraian"
-}
-
-export enum DifficultyLevel {
-  Mudah = "Mudah",
-  Sedang = "Sedang",
-  Sulit = "Sulit"
-}
-
-export enum CognitiveLevel {
-  LOTS = "LOTS",
-  MOTS = "MOTS",
-  HOTS = "HOTS"
-}
-
-export interface SoalConfig {
-  type: QuestionType;
-  count: number;
-  difficulty: DifficultyLevel;
-  cognitive: CognitiveLevel;
 }
 
 export interface MeetingPlan {
